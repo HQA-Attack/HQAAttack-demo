@@ -1,6 +1,6 @@
 # HQA-Attack
 
-This is the implementation code of the paper *HQA-Attack: Toward High Quality Black-box Hard-label Adversarial Attack on Textk*
+This is the implementation code of the paper *HQA-Attack: Toward High Quality Black-box Hard-label Adversarial Attack on Text*
 
 
 
