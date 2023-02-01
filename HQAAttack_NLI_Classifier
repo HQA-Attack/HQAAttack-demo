@@ -873,7 +873,7 @@ def softmax(x):
     return f_x
 
 
-def dbattack(fuzz_val, top_k_words,optim_step, qrs, sample_index, hypotheses,random_text_, premise, true_label,orig_label,
+def attack(fuzz_val, top_k_words,optim_step, qrs, sample_index, hypotheses,random_text_, premise, true_label,orig_label,
            predictor, stop_words_set, word2idx, idx2word, cos_sim, sim_predictor=None,n_sample = 5,
            import_score_threshold=-1., sim_score_threshold=0.5, sim_score_window=15, synonym_num=50,
            batch_size=32, embed_func='',k_threshold=0,k_sample=5,qrs_limits=1000,qrs_stopp=[100,200,300,400,500,600,700,800,900,1000]):
@@ -1543,7 +1543,7 @@ def main():
                 optim_step[kp] = []
 
             new_text, num_changed, random_changed, orig_label, \
-            new_label, num_queries, sim, random_sim = dbattack(args.fuzz, args.top_k_words,optim_step, args.allowed_qrs,
+            new_label, num_queries, sim, random_sim = attack(args.fuzz, args.top_k_words,optim_step, args.allowed_qrs,
                                                              idx, hypothese,random_text, premise, true_label,orig_label, predictor,
                                                              stop_words_set,
                                                              word2idx, idx2word, sim_lis, sim_predictor=use,
@@ -1561,9 +1561,6 @@ def main():
                     num_changed += 1
             db_sims.append(float(sim))
             db_cr.append(num_changed/len(hypothese))
-
-
-
 
 
 
