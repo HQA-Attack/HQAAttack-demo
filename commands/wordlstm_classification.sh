@@ -1,4 +1,4 @@
-python3 classification_attack.py \
+python HQAAttack_Text_Classifier.py \
         --dataset_path data/imdb  \
         --word_embeddings_path glove.6B.200d.txt \
         --target_model wordLSTM \
@@ -10,7 +10,7 @@ python3 classification_attack.py \
         --max_seq_length 256 \
         --sim_score_window 40 \
         --nclasses 2 &&
-python3 classification_attack.py \
+python HQAAttack_Text_Classifier.py \
         --dataset_path data/yelp  \
         --word_embeddings_path glove.6B.200d.txt \
         --target_model wordLSTM \
@@ -22,7 +22,7 @@ python3 classification_attack.py \
         --max_seq_length 256 \
         --sim_score_window 40 \
         --nclasses 2 &&
-python3 attack_classification_yahoo.py \
+python HQAAttack_Text_Classifier.py \
         --dataset_path data/yahoo  \
         --word_embeddings_path glove.6B.200d.txt \
         --target_model wordLSTM \
@@ -34,7 +34,7 @@ python3 attack_classification_yahoo.py \
         --max_seq_length 256 \
         --sim_score_window 40 \
         --nclasses 10 &&
-python3 classification_attack.py \
+python HQAAttack_Text_Classifier.py \
         --dataset_path data/ag  \
         --word_embeddings_path glove.6B.200d.txt \
         --target_model wordLSTM \
@@ -46,7 +46,7 @@ python3 classification_attack.py \
         --max_seq_length 256 \
         --sim_score_window 40 \
         --nclasses 4 &&
-python3 classification_attack.py \
+python HQAAttack_Text_Classifier.py \
         --dataset_path data/mr  \
         --word_embeddings_path glove.6B.200d.txt \
         --target_model wordLSTM \
