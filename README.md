@@ -14,6 +14,6 @@ This is the implementation code of the paper *HQA-Attack: Toward High Quality Bl
  
 ## How to Run:
 
-**HQAAttack_Text_Classifier.py** and **HQAAttack_NLI_Classifier** are our attack files. The corresponding commands are in the <code>commands</code> file.
+**HQAAttack_Text_Classifier.py** and **HQAAttack_NLI_Classifier.py** are our attack files. The corresponding commands are in the <code>commands</code> file.
 
 
