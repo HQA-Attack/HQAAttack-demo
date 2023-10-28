@@ -1063,9 +1063,38 @@ def attack(fuzz_val, top_k_words,optim_step, qrs, sample_index, hypotheses,rando
                     else:
                         x_t = random_text[:]
                     wbcount = 0
+                while True and t==0:
+                    choices = []
+                    for i in range(len(text_ls)):
+                        if x_t[i] != text_ls[i]:
+                            new_text = x_t[:]
+                            new_text[i] = text_ls[i]
+                            semantic_sims = calc_sim(text_ls, [new_text], -1, sim_score_window, sim_predictor)
+                            
+                            pr,vqr = get_attack_result([new_text], premise, predictor, orig_label, batch_size)
+                            qrs += vqr
+                            if np.sum(pr) > 0:
+                                choices.append((i, semantic_sims[0]))
 
 
-                while True:
+                    if len(choices) > 0:
+                        choices.sort(key=lambda x: x[1])
+                        choices.reverse()
+                        for i in range(len(choices)):
+                            new_text = x_t[:]
+                            new_text[choices[i][0]] = text_ls[choices[i][0]]
+                            pr,vqr = get_attack_result([new_text], premise, predictor, orig_label, batch_size)
+                            qrs += vqr
+                            if pr[0] == 0:
+                                break
+                            x_t[choices[i][0]] = text_ls[choices[i][0]]
+
+                    if len(choices) == 0:
+                        break
+
+             
+
+                while True and t!=0:
                     choices = []
 
                     for i in range(len(text_ls)):
