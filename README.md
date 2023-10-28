@@ -1,4 +1,4 @@
-# SSPAttack
+# HQA-Attack
 
 This is the implementation code of the paper *HQA-Attack: Toward High Quality Black-Box Hard-Label Adversarial Attack on Text*
 
