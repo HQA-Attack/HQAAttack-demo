@@ -489,7 +489,7 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                 synonyms_all.append((idx,synonyms))
                 synonyms_dict[word] = synonyms
 
-    qrs = 0
+    qrs = old_qrs
     flag = 1
     best_qrs = 0
     if flag == 1:
@@ -513,7 +513,7 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
         best_qrs = qrs
         for kp in qrs_stopp:
             if qrs<=kp:
-                optim_step[kp] = [best_sim," ".join(best_attack),qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                optim_step[kp] = [best_sim," ".join(best_attack),qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
 
         random_sim = calc_sim(text_ls, [random_text], -1, sim_score_window, sim_predictor)[0]
         best_sim = random_sim
@@ -531,16 +531,16 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
             for widx in res[1]:
                 w = idx2word[widx]
                 x_t[change_idx] = w
-                pr = get_attack_result([x_t], predictor, orig_label, batch_size)
+                pr,vqr = get_attack_result([x_t], predictor, orig_label, batch_size,hash_qrs)
                 sim = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
-                qrs += 1
-                if np.sum(pr) > 0 and sim > best_sim:
+                qrs += vqr
+                if np.sum(pr) > 0 and round(sim,3) >= round(best_sim,3):
                     best_attack = x_t[:]
                     best_sim = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
                     best_qrs = qrs
                     for kp in qrs_stopp:
                         if qrs<=kp:
-                            optim_step[kp] = [best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                            optim_step[kp] = [best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
 
             return ' '.join(best_attack), 1, 1, \
                    orig_label, 1, qrs, best_sim, random_sim, best_qrs
@@ -565,7 +565,8 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
             x_t = x_tilde[:]
             x_t_str = " ".join(x_t)
             if " ".join(x_t) not in stack_over and " ".join(x_t) not in stack_str:
-                pr = get_attack_result([x_t], predictor, orig_label, batch_size)
+                pr,vqr = get_attack_result([x_t], predictor, orig_label, batch_size,hash_qrs)
+                qrs += vqr
                 if np.sum(pr) > 0:
                     stack.append(x_t[:])
                     stack_str.append(" ".join(x_t))
@@ -583,11 +584,40 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                     stack_over.append(" ".join(x_t))
                 else:
                     x_t = random_text[:]
+                    way_back_num += 5
                 wbcount = 0
-
             
+            
+            while True and t==0:
+                choices = []
+                for i in range(len(text_ls)):
+                    if x_t[i] != text_ls[i]:
+                        new_text = x_t[:]
+                        new_text[i] = text_ls[i]
+                        semantic_sims = calc_sim(text_ls, [new_text], -1, sim_score_window, sim_predictor)
+                        
+                        pr,vqr = get_attack_result([new_text], predictor, orig_label, batch_size,hash_qrs)
+                        qrs += vqr
+                        if np.sum(pr) > 0:
+                            choices.append((i, semantic_sims[0]))
 
-            while True:
+
+                if len(choices) > 0:
+                    choices.sort(key=lambda x: x[1])
+                    choices.reverse()
+                    for i in range(len(choices)):
+                        new_text = x_t[:]
+                        new_text[choices[i][0]] = text_ls[choices[i][0]]
+                        pr,vqr = get_attack_result([new_text], predictor, orig_label, batch_size,hash_qrs)
+                        qrs += vqr
+                        if pr[0] == 0:
+                            break
+                        x_t[choices[i][0]] = text_ls[choices[i][0]]
+
+                if len(choices) == 0:
+                    break
+
+            while True and t!=0:
                 choices = []
 
                 for i in range(len(text_ls)):
@@ -596,7 +626,6 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                         new_text[i] = text_ls[i]
                         semantic_sims = calc_sim(text_ls, [new_text], -1, sim_score_window, sim_predictor)
                         choices.append((i,semantic_sims[0]))
-                                        
                 
                 choices.sort(key=lambda x: x[1])
                 choices.reverse()
@@ -604,23 +633,24 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                 for i in range(len(choices)):
                     new_text = x_t[:]
                     new_text[choices[i][0]] = text_ls[choices[i][0]]
-                    pr = get_attack_result([new_text], predictor, orig_label, batch_size)
-                    qrs += 1
-                    if qrs > qrs_limits:
-                        return ' '.join(best_attack), 1, len(changed_indices), \
-                                orig_label, 1, qrs, best_sim, random_sim, best_qrs
+                    pr,vqr = get_attack_result([new_text], predictor, orig_label, batch_size,hash_qrs)
+                    qrs += vqr
                     if np.sum(pr)>0:
                         x_t[choices[i][0]] = text_ls[choices[i][0]]
                         sims = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
-                        if sims>best_sim:
+                        if round(sims,3) >= round(best_sim,3):
                             best_attack=x_t[:]
                             best_sim=sims
                             best_qrs=qrs
+                            wbcount = 0
                             for ksp in qrs_stopp:
                                 if qrs<=ksp:
-                                    optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                    optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                         flag = False
                         break
+                    if qrs > qrs_limits:
+                        return ' '.join(best_attack), 1, len(changed_indices), \
+                            orig_label, 1, qrs, best_sim, random_sim, best_qrs
                 if flag:
                     break
 
@@ -632,7 +662,7 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
             x_t_sim = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
 
             if np.sum(
-                    get_attack_result([x_t], predictor, orig_label, batch_size)) > 0 and (
+                    get_attack_result([x_t], predictor, orig_label, batch_size,hash_qrs)[0]) > 0 and (
                     num_changed == 1):
                 change_idx = 0
                 for i in range(len(text_ls)):
@@ -644,17 +674,18 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                 for widx in res[1]:
                     w = idx2word[widx]
                     x_t[change_idx] = w
-                    pr = get_attack_result([x_t], predictor, orig_label, batch_size)
+                    pr,vqr = get_attack_result([x_t], predictor, orig_label, batch_size,hash_qrs)
                     sim = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
-                    qrs += 1
+                    qrs += vqr
                     
-                    if np.sum(pr) > 0 and sim > best_sim:
+                    if np.sum(pr) > 0 and round(sim,3) >= round(best_sim,3):
                         best_sim = calc_sim(text_ls, [x_t], -1, sim_score_window, sim_predictor)[0]
                         best_attack = x_t[:]
                         best_qrs = qrs
+                        wbcount = 0
                         for ksp in qrs_stopp:
                             if qrs<=ksp:
-                                optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                     if qrs > qrs_limits:
                         return ' '.join(best_attack), 1, len(changed_indices), \
                                orig_label, 1, qrs, best_sim, random_sim,  best_qrs
@@ -662,14 +693,15 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                        orig_label, 1, qrs, best_sim, random_sim, best_qrs
 
             if np.sum(
-                    get_attack_result([x_t], predictor, orig_label, batch_size)) > 0 and (
-                    x_t_sim > best_sim):
+                    get_attack_result([x_t], predictor, orig_label, batch_size,hash_qrs)[0]) > 0 and (
+                    round(x_t_sim,3) > round(best_sim,3)):
                 best_attack = x_t[:]
                 best_sim = x_t_sim
                 best_qrs = qrs
+                wbcount = 0
                 for ksp in qrs_stopp:
                     if qrs<=ksp:
-                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                 wbcount = 0
 
 
@@ -705,6 +737,8 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                 orig_word = text_ls[synonyms_all[perturb_word_idx][0]]
                 ad_replacement = []
                 n_samples = []
+
+                # pdb.set_trace()
                 while len(n_samples) < n_sample:
                     syn_idx = random.randint(0, 49)
                     if syn_idx not in n_samples:
@@ -715,19 +749,21 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                     syn_idx = n_samples[_]
                     replacement = synonyms_all[perturb_word_idx][1][syn_idx]
                     x_t_tmp[synonyms_all[perturb_word_idx][0]] = replacement
-                    if np.sum(get_attack_result([x_t_tmp], predictor, orig_label, batch_size)) > 0:
+                    pr_v,vqr = get_attack_result([x_t_tmp], predictor, orig_label, batch_size,hash_qrs)
+                    if np.sum(pr_v) > 0:
                         sim_tmp = calc_sim(text_ls, [x_t_tmp], -1, sim_score_window, sim_predictor)[0]
-                        if sim_tmp > best_sim:
+                        if round(sim_tmp,3) >= round(best_sim,3):
                             best_attack = x_t_tmp[:]
                             best_sim = sim_tmp
                             best_qrs = qrs
+                            wbcount = 0
                             for ksp in qrs_stopp:
                                     if qrs<=ksp:
-                                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                             wbcount = 0
                         ad_replacement.append((replacement, sim_tmp,syn_idx))
 
-                    qrs += 1
+                    qrs += vqr
                     if qrs > qrs_limits:
                         return ' '.join(best_attack), 1, len(changed_indices), \
                                orig_label, 1, qrs, best_sim, random_sim, best_qrs\
@@ -785,32 +821,32 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                         cd,similarity = ite
                         x_t_tmp = x_t[:]
                         x_t_tmp[synonyms_all[perturb_word_idx][0]] = idx2word[cd]
-                        pr = get_attack_result([x_t_tmp], predictor, orig_label, batch_size)
-                        qrs+=1
+                        pr,vqr = get_attack_result([x_t_tmp], predictor, orig_label, batch_size,hash_qrs)
+                        qrs+=vqr
 
                         if np.sum(pr)>0:
                             sim_tmp = calc_sim(text_ls, [x_t_tmp], -1, sim_score_window, sim_predictor)[0]
-                            if sim_tmp > best_sim:
+                            if round(sim_tmp,3) >= round(best_sim,3):
                                 best_attack = x_t_tmp[:]
                                 best_sim = sim_tmp
                                 best_qrs = qrs
                                 wbcount=0
                                 for ksp in qrs_stopp:
                                     if qrs<=ksp:
-                                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                        optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                             best_rep = idx2word[cd]
                             break
                         if qrs>qrs_limits:
                             if np.sum(pr)>0:
                                 sim_tmp = calc_sim(text_ls, [x_t_tmp], -1, sim_score_window, sim_predictor)[0]
-                                if sim_tmp > best_sim:
+                                if round(sim_tmp,3) >= round(best_sim,3):
                                     best_attack = x_t_tmp[:]
                                     best_sim = sim_tmp
                                     best_qrs = qrs
                                     wbcount=0
                                     for ksp in qrs_stopp:
                                         if qrs<=ksp:
-                                            optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                            optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
 
                             return ' '.join(best_attack), 1, len(changed_indices), \
                                     orig_label, 1, qrs, best_sim, random_sim, best_qrs
@@ -818,19 +854,19 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                 else:
                     x_tilde[synonyms_all[perturb_word_idx][0]] = x_t_orig_word
 
-                pr = get_attack_result([x_tilde], predictor, orig_label, batch_size)
-                qrs += 1
+                pr,vqr = get_attack_result([x_tilde], predictor, orig_label, batch_size,hash_qrs)
+                qrs += vqr
                 if np.sum(pr) > 0:
                     sim_new = calc_sim(text_ls, [x_tilde], -1, sim_score_window, sim_predictor)[0]
-                    if (sim_new > best_sim) and (
-                            np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size)) > 0):
+                    if (round(sim_new,3) >= round(best_sim,3)) and (
+                            np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size,hash_qrs)[0]) > 0):
                         best_attack = x_tilde[:]
                         best_sim = sim_new
                         best_qrs = qrs
                         wbcount = 0
                         for ksp in qrs_stopp:
                             if qrs<=ksp:
-                                optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                 if qrs > qrs_limits:
                     return ' '.join(best_attack), 1, len(changed_indices), \
                            orig_label, 1, qrs, best_sim, random_sim, best_qrs
@@ -839,15 +875,15 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
 
             if np.sum(pr) > 0:
                 sim_new = calc_sim(text_ls, [x_tilde], -1, sim_score_window, sim_predictor)[0]
-                if (sim_new > best_sim) and (
-                        np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size)) > 0):
+                if (round(sim_new,3) > round(best_sim,3)) and (
+                        np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size,hash_qrs)[0]) > 0):
                     best_attack = x_tilde[:]
                     best_sim = sim_new
                     best_qrs = qrs
                     wbcount = 0
                     for ksp in qrs_stopp:
                         if qrs<=ksp:
-                            optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                            optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
             else:
 
                 while True:
@@ -860,16 +896,16 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
                             changed_tt.append((i,sim_tmp))
                     changed_tt = sorted(changed_tt,key=lambda x:x[-1],reverse=True)
                     x_tilde[changed_tt[0][0]] = x_t[changed_tt[0][0]]
-                    if np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size)) > 0:
+                    if np.sum(get_attack_result([x_tilde], predictor, orig_label, batch_size,hash_qrs)[0]) > 0:
                         qrs+=1
                         sim_new = calc_sim(text_ls, [x_tilde], -1, sim_score_window, sim_predictor)[0]
-                        if sim_new > best_sim:
+                        if round(sim_new,3) >= round(best_sim,3):
                             best_sim = sim_new
                             best_attack = x_tilde[:]
                             wbcount = 0
                             for ksp in qrs_stopp:
                                 if qrs<=ksp:
-                                    optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size))>0]
+                                    optim_step[ksp]=[best_sim," ".join(best_attack),best_qrs,np.sum(get_attack_result([best_attack], predictor, orig_label, batch_size,hash_qrs)[0])>0]
                         if qrs > qrs_limits:
                             return ' '.join(best_attack), 1, len(changed_indices), \
                                 orig_label, 1, qrs, best_sim, random_sim, best_qrs
@@ -894,7 +930,6 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
     else:
         print("Not Found")
         return '', 0, 0, orig_label, orig_label, 0, 0, 0, 0
-
 
 def main():
     parser = argparse.ArgumentParser()
