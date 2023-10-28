@@ -295,12 +295,16 @@ def calc_sim(text_ls, new_texts, idx, sim_score_window, sim_predictor):
     return semantic_sims
 
 
-def get_attack_result(new_text, predictor, orig_label, batch_size):
+def get_attack_result(new_text, predictor, orig_label, batch_size,hash_qrs):
     # new_text = "turkey unlikely to join eu before 2015 commissioner verheugen \\( afp \\) afp turkey is unlikely to join the euro union before 2015 , eu growth commissioner guenter verheugen said in an interview"
+    # assert len(new_text)==1
+    if " ".join(new_text[0]) in hash_qrs:
+        return hash_qrs[" ".join(new_text[0])],1
+    
     new_probs = predictor(new_text, batch_size=batch_size)
     pr = (orig_label != torch.argmax(new_probs, dim=-1)).data.cpu().numpy()
-    # pdb.set_trace()
-    return pr
+    hash_qrs[" ".join(new_text[0])] = pr
+    return pr,1
 
 
 def random_attack(top_k_words, text_ls, true_label,
@@ -1098,6 +1102,7 @@ def main():
 
 
     for idx, (text, true_label) in enumerate(data):
+        hash_qrs = {}
         random_text, random_qrs, orig_label_, flag = random_attack(args.top_k_words, text_ls=text,
                                                                    true_label=true_label,
                                                                    predictor=predictor, word2idx=word2idx,
