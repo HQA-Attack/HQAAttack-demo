@@ -496,6 +496,7 @@ def attack(fuzz_val,optim_step, orig_label, top_k_words, qrs, sample_index, text
     qrs = old_qrs
     flag = 1
     best_qrs = 0
+    hash_qrs = {}
     if flag == 1:
         
         changed = 0
